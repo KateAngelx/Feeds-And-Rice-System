@@ -11,7 +11,12 @@ export async function GET(
       where: { id },
       include: {
         customer: true,
-        product: true,
+        items: {
+          include: {
+            product: true,
+          },
+        },
+        creditRecords: true,
       },
     });
 
@@ -45,7 +50,11 @@ export async function PUT(
       data: body,
       include: {
         customer: true,
-        product: true,
+        items: {
+          include: {
+            product: true,
+          },
+        },
       },
     });
 

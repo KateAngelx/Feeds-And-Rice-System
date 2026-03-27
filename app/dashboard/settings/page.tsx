@@ -24,7 +24,6 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { STORAGE_KEYS, DEFAULT_STORE_SETTINGS } from '@/lib/constants'
-import { seedProducts, seedCustomers } from '@/lib/seed-data'
 import type { StoreSettings, User } from '@/lib/types'
 import { Store, Users, RefreshCw, ShieldAlert, Save } from 'lucide-react'
 

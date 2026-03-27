@@ -1,11 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 
+// GET all products
+export async function GET(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url)
+    const category = searchParams.get('category')
+    const where = category ? { category } : {}
+
+    const products = await prisma.product.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+    })
+    return NextResponse.json(products)
+  } catch (error) {
+    console.error('GET Products Error:', error)
+    return NextResponse.json({ error: 'Failed to fetch products' }, { status: 500 })
+  }
+}
+
+// POST create new product
 export async function POST(req: NextRequest) {
   try {
     const data = await req.json()
 
-    // 1. Validation
+    // Validation: Ensure the basics exist
     if (!data.name || !data.category || !data.createdBy) {
       return NextResponse.json(
         { error: 'Missing required fields: name, category, or createdBy' },
@@ -13,7 +32,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // 2. Explicit conversion to Int for Prisma/PostgreSQL
+    // CREATE in Database with explicit type casting
     const product = await prisma.product.create({
       data: {
         name: String(data.name),
@@ -25,15 +44,17 @@ export async function POST(req: NextRequest) {
         unit: String(data.unit || 'piece'),
         lowStockThreshold: Math.round(Number(data.lowStockThreshold)) || 5,
         isApproved: Boolean(data.isApproved),
-        createdBy: String(data.createdBy), // MUST match a real User ID in your DB
+        createdBy: String(data.createdBy),
+        ...(data.approvedBy && { approvedBy: String(data.approvedBy) }),
       },
     })
 
     return NextResponse.json(product, { status: 201 })
-  } catch (error: any) {
-    console.error('DATABASE REJECTION:', error.message)
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    console.error('DATABASE SAVE ERROR:', errorMessage)
     return NextResponse.json(
-      { error: `Database Error: ${error.message}. Ensure the User ID exists in the database.` },
+      { error: `Database Error: ${errorMessage}. Ensure the User ID exists in the database.` },
       { status: 500 }
     )
   }
