@@ -1,0 +1,143 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  username  String   @unique
+  password  String   // bcrypt hashed
+  role      String   @default("cashier") // admin, cashier
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  productsCreated   Product[]     @relation("CreatedBy")
+  productsApproved  Product[]     @relation("ApprovedBy")
+  transactions      Transaction[] @relation("Cashier")
+  creditRecords     CreditRecord[]
+
+  @@map("users")
+}
+
+model Product {
+  id                 String   @id @default(cuid())
+  name               String
+  category           String   // feeds, rice
+  retailPrice        Int      // in cents
+  wholesalePrice     Int      // in cents
+  capitalPrice       Int      // in cents
+  stock              Int
+  unit               String   // kg, sack, piece
+  lowStockThreshold  Int
+  isApproved         Boolean  @default(false)
+  createdBy          String
+  approvedBy         String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  // Relations
+  creator            User              @relation("CreatedBy", fields: [createdBy], references: [id])
+  approver           User?             @relation("ApprovedBy", fields: [approvedBy], references: [id], onDelete: SetNull)
+  transactionItems   TransactionItem[]
+
+  @@map("products")
+}
+
+model Customer {
+  id            String   @id @default(cuid())
+  name          String
+  phone         String?
+  address       String?
+  creditBalance Int      @default(0) // in cents
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  transactions   Transaction[]
+  creditRecords  CreditRecord[]
+
+  @@map("customers")
+}
+
+model Transaction {
+  id            String   @id @default(cuid())
+  subtotal      Int      // in cents
+  discount      Int      @default(0) // in cents
+  total         Int      // in cents
+  paymentMethod String   // cash, credit
+  amountPaid    Int      // in cents
+  change        Int      @default(0) // in cents
+  customerId    String?
+  customerName  String?
+  cashierId     String
+  cashierName   String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  customer      Customer?         @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  cashier       User              @relation("Cashier", fields: [cashierId], references: [id])
+  items         TransactionItem[]
+  creditRecords CreditRecord[]
+
+  @@map("transactions")
+}
+
+model TransactionItem {
+  id          String   @id @default(cuid())
+  productId   String
+  productName String
+  quantity    Int
+  unit        String
+  price       Int      // in cents
+  priceType   String   // retail, wholesale
+  subtotal    Int      // in cents
+  transactionId String
+  createdAt   DateTime @default(now())
+
+  // Relations
+  product     Product      @relation(fields: [productId], references: [id], onDelete: Restrict)
+  transaction Transaction  @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  @@map("transaction_items")
+}
+
+model CreditRecord {
+  id            String   @id @default(cuid())
+  customerId    String
+  customerName  String
+  transactionId String?
+  amount        Int      // in cents
+  type          String   // credit, payment
+  notes         String?
+  createdAt     DateTime @default(now())
+  recordedBy    String
+
+  // Relations
+  customer      Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  transaction   Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  recordedByUser User        @relation(fields: [recordedBy], references: [id])
+
+  @@map("credit_records")
+}
+
+model StoreSettings {
+  id            String   @id @default(cuid())
+  name          String
+  address       String
+  phone         String
+  receiptFooter String?
+  updatedAt     DateTime @updatedAt
+
+  @@map("store_settings")
+}

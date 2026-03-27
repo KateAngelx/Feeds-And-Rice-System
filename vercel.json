@@ -1,0 +1,13 @@
+{
+  "buildCommand": "prisma generate && npm run build",
+  "devCommand": "npm run dev",
+  "env": {
+    "PRISMA_SKIP_ENGINE_CHECK": "@prisma/client"
+  },
+  "functions": {
+    "api/**/*.ts": {
+      "memory": 1024,
+      "maxDuration": 60
+    }
+  }
+}
