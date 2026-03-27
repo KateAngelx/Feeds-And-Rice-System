@@ -3,8 +3,8 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import useSWR from 'swr'
 import { useAuth } from '@/hooks/use-auth'
-import { useLocalStorage } from '@/hooks/use-local-storage'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -23,26 +23,36 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
-import { STORAGE_KEYS, DEFAULT_STORE_SETTINGS } from '@/lib/constants'
-import { seedProducts, seedCustomers } from '@/lib/seed-data'
-import type { StoreSettings, User } from '@/lib/types'
-import { Store, Users, RefreshCw, ShieldAlert, Save } from 'lucide-react'
+import { DEFAULT_STORE_SETTINGS } from '@/lib/constants'
+import type { StoreSettings } from '@/lib/types'
+import { Store, Users, RefreshCw, ShieldAlert, Save, Database } from 'lucide-react'
+
+interface User {
+  id: string
+  username: string
+  name: string
+  role: string
+}
+
+const fetcher = (url: string) => fetch(url).then(res => res.json())
 
 export default function SettingsPage() {
   const { user, isAdmin } = useAuth()
   const router = useRouter()
 
-  const { value: storeSettings, setValue: setStoreSettings, isLoaded: settingsLoaded } = 
-    useLocalStorage<StoreSettings>(STORAGE_KEYS.STORE_SETTINGS, DEFAULT_STORE_SETTINGS)
-  const { value: users, isLoaded: usersLoaded } = 
-    useLocalStorage<User[]>(STORAGE_KEYS.USERS, [])
-  const { setValue: setUsers } = useLocalStorage<User[]>(STORAGE_KEYS.USERS, [])
-  const { setValue: setProducts } = useLocalStorage(STORAGE_KEYS.PRODUCTS, [])
-  const { setValue: setCustomers } = useLocalStorage(STORAGE_KEYS.CUSTOMERS, [])
-  const { setValue: setTransactions } = useLocalStorage(STORAGE_KEYS.TRANSACTIONS, [])
-  const { setValue: setCreditRecords } = useLocalStorage(STORAGE_KEYS.CREDIT_RECORDS, [])
+  const { data: storeSettings, mutate: refreshSettings } = useSWR<StoreSettings>(
+    '/api/store-settings',
+    fetcher
+  )
+
+  const { data: users = [] } = useSWR<User[]>(
+    '/api/users',
+    fetcher,
+    { fallbackData: [] }
+  )
 
   const [formData, setFormData] = useState<StoreSettings>(DEFAULT_STORE_SETTINGS)
+  const [isSaving, setIsSaving] = useState(false)
 
   useEffect(() => {
     if (!isAdmin) {
@@ -51,36 +61,37 @@ export default function SettingsPage() {
   }, [isAdmin, router])
 
   useEffect(() => {
-    if (settingsLoaded && storeSettings) {
+    if (storeSettings) {
       setFormData(storeSettings)
     }
-  }, [settingsLoaded, storeSettings])
+  }, [storeSettings])
 
-  const handleSaveSettings = () => {
-    setStoreSettings(formData)
-    toast.success('Settings saved', {
-      description: 'Store settings have been updated.',
-    })
+  const handleSaveSettings = async () => {
+    setIsSaving(true)
+    try {
+      const response = await fetch('/api/store-settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      })
+
+      if (response.ok) {
+        await refreshSettings()
+        toast.success('Settings saved', {
+          description: 'Store settings have been updated.',
+        })
+      } else {
+        toast.error('Failed to save settings')
+      }
+    } catch (error) {
+      console.error('Error saving settings:', error)
+      toast.error('Failed to save settings')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
-  const handleResetData = () => {
-  
-    setTransactions([])
-    setCreditRecords([])
-    toast.success('Data reset', {
-      description: 'All data has been reset to default values.',
-    })
-  }
-
-  const handleClearTransactions = () => {
-    setTransactions([])
-    setCreditRecords([])
-    toast.success('History cleared', {
-      description: 'All transaction and credit records have been cleared.',
-    })
-  }
-
-  if (!isAdmin || !settingsLoaded || !usersLoaded) {
+  if (!isAdmin) {
     return null
   }
 
@@ -139,9 +150,13 @@ export default function SettingsPage() {
                   rows={2}
                 />
               </Field>
-              <Button onClick={handleSaveSettings} className="w-full bg-emerald-600 text-white hover:bg-emerald-700">
+              <Button 
+                onClick={handleSaveSettings} 
+                className="w-full bg-emerald-600 text-white hover:bg-emerald-700"
+                disabled={isSaving}
+              >
                 <Save className="mr-2 h-4 w-4" />
-                Save Settings
+                {isSaving ? 'Saving...' : 'Save Settings'}
               </Button>
             </FieldGroup>
           </CardContent>
@@ -182,79 +197,23 @@ export default function SettingsPage() {
                   </div>
                 </div>
               ))}
+              {users.length === 0 && (
+                <p className="text-sm text-muted-foreground">No users found. Run database seed to create users.</p>
+              )}
             </div>
-            <p className="mt-4 text-xs text-muted-foreground">
-              Note: User management is simplified for this demo. In production, passwords would be hashed and user CRUD operations would be available.
-            </p>
           </CardContent>
         </Card>
 
-        {/* Data Management */}
+        {/* Database Info */}
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-destructive">
-              <ShieldAlert className="h-5 w-5" />
-              Data Management
+            <CardTitle className="flex items-center gap-2">
+              <Database className="h-5 w-5" />
+              Database Information
             </CardTitle>
             <CardDescription>
-              Reset or clear system data. These actions cannot be undone.
+              This system uses PostgreSQL (Neon) for data storage
             </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col gap-4 sm:flex-row">
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="outline" className="flex-1">
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                    Clear Transaction History
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Clear Transaction History?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This will permanently delete all transaction records and credit history. Products, customers, and their credit balances will remain intact.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleClearTransactions} className="bg-destructive text-white hover:bg-destructive/90">
-                      Clear History
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="destructive" className="flex-1">
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                    Reset All Data
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Reset All Data?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This will permanently delete ALL data including products, customers, transactions, and credit records. Everything will be reset to the default sample data. This action cannot be undone.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleResetData} className="bg-destructive text-white hover:bg-destructive/90">
-                      Reset Everything
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* System Info */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>System Information</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid gap-4 text-sm sm:grid-cols-3">
@@ -263,8 +222,8 @@ export default function SettingsPage() {
                 <p className="font-medium">Feeds & Rice Store POS</p>
               </div>
               <div>
-                <p className="text-muted-foreground">Storage</p>
-                <p className="font-medium">Local Storage (Browser)</p>
+                <p className="text-muted-foreground">Database</p>
+                <p className="font-medium">PostgreSQL (Neon)</p>
               </div>
               <div>
                 <p className="text-muted-foreground">Currency</p>
@@ -273,7 +232,7 @@ export default function SettingsPage() {
             </div>
             <Separator className="my-4" />
             <p className="text-xs text-muted-foreground">
-              This is a demo POS system using browser local storage. Data is stored locally on this device and will persist across sessions. Clearing browser data will remove all stored information.
+              This POS system uses a PostgreSQL database hosted on Neon. All data is stored securely in the cloud and persists across sessions. Use the Prisma seed command to initialize or reset database data.
             </p>
           </CardContent>
         </Card>

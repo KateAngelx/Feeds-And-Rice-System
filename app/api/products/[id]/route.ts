@@ -1,42 +1,83 @@
-// app/api/products/[id]/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: { id: string } }
+// GET single product
+export async function GET(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params
+    const { id } = await params
+    const product = await prisma.product.findUnique({
+      where: { id },
+    })
+
+    if (!product) {
+      return NextResponse.json(
+        { error: 'Product not found' },
+        { status: 404 }
+      )
+    }
+
+    return NextResponse.json(product)
+  } catch (error) {
+    console.error('Get product error:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+
+// PATCH update product
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
     const data = await request.json()
 
     const product = await prisma.product.update({
       where: { id },
       data: {
         ...(data.name && { name: String(data.name) }),
+        ...(data.category && { category: String(data.category) }),
         ...(data.retailPrice !== undefined && { retailPrice: Math.round(Number(data.retailPrice)) }),
         ...(data.wholesalePrice !== undefined && { wholesalePrice: Math.round(Number(data.wholesalePrice)) }),
         ...(data.capitalPrice !== undefined && { capitalPrice: Math.round(Number(data.capitalPrice)) }),
         ...(data.stock !== undefined && { stock: Math.round(Number(data.stock)) }),
+        ...(data.unit && { unit: String(data.unit) }),
+        ...(data.lowStockThreshold !== undefined && { lowStockThreshold: Math.round(Number(data.lowStockThreshold)) }),
         ...(data.isApproved !== undefined && { isApproved: Boolean(data.isApproved) }),
         ...(data.approvedBy && { approvedBy: String(data.approvedBy) }),
       },
     })
 
     return NextResponse.json(product)
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  } catch (error) {
+    console.error('Update product error:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
   }
 }
 
+// DELETE product
 export async function DELETE(
   _request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await prisma.product.delete({ where: { id: params.id } })
-    return NextResponse.json({ message: 'Deleted' })
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    const { id } = await params
+    await prisma.product.delete({ where: { id } })
+    return NextResponse.json({ message: 'Product deleted successfully' })
+  } catch (error) {
+    console.error('Delete product error:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
   }
 }

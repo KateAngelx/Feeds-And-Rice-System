@@ -122,6 +122,23 @@ export function useCustomers() {
     return customers.filter(c => c.creditBalance > 0)
   }, [customers])
 
+  // Add credit to customer (used by POS terminal for credit sales)
+  const addCredit = useCallback(async (
+    customerId: string, 
+    amount: number, 
+    transactionId: string, 
+    recordedByName: string
+  ) => {
+    try {
+      // The transaction API already handles credit record creation and balance update
+      // This function is kept for compatibility but the main work is done in the transaction
+      await refreshCustomers()
+    } catch (error) {
+      console.error('Error adding credit:', error)
+      throw error
+    }
+  }, [refreshCustomers])
+
   return {
     customers,
     refreshCustomers,
@@ -131,6 +148,7 @@ export function useCustomers() {
     getCustomer,
     recordCreditTransaction,
     getCustomersWithCredit,
+    addCredit,
     isLoaded: !isLoading,
   }
 }

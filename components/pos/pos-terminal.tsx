@@ -16,8 +16,8 @@ import type { Product, Transaction } from '@/lib/types'
 
 export function POSTerminal() {
   const { user } = useAuth()
-  const { products, adjustStock } = useProducts()
-  const { customers, addCredit } = useCustomers()
+  const { products, refreshProducts } = useProducts()
+  const { customers, refreshCustomers } = useCustomers()
   const { addTransaction } = useTransactions()
   const cart = useCart()
 
@@ -47,7 +47,7 @@ export function POSTerminal() {
     })
   }
 
-  const handlePaymentComplete = (
+  const handlePaymentComplete = async (
     paymentMethod: 'cash' | 'credit',
     amountPaid: number,
     customerId?: string
@@ -70,48 +70,53 @@ export function POSTerminal() {
       }
     })
 
-    // Create transaction
-    const transaction = addTransaction({
-      items: transactionItems,
-      subtotal: cart.subtotal,
-      discount: cart.discount,
-      total: cart.total,
-      paymentMethod,
-      amountPaid,
-      change: paymentMethod === 'cash' ? amountPaid - cart.total : 0,
-      customerId: customer?.id,
-      customerName: customer?.name,
-      cashierId: user.id,
-      cashierName: user.name,
-    })
+    try {
+      // Create transaction (API handles stock deduction and credit record creation)
+      const transaction = await addTransaction({
+        items: transactionItems,
+        subtotal: cart.subtotal,
+        discount: cart.discount,
+        total: cart.total,
+        paymentMethod,
+        amountPaid,
+        change: paymentMethod === 'cash' ? amountPaid - cart.total : 0,
+        customerId: customer?.id,
+        customerName: customer?.name,
+        cashierId: user.id,
+        cashierName: user.name,
+      })
 
-    // Deduct inventory
-    cart.items.forEach((item) => {
-      adjustStock(item.product.id, -item.quantity)
-    })
+      // Refresh products to get updated stock
+      await refreshProducts()
 
-    // Add credit if credit sale
-    if (paymentMethod === 'credit' && customerId) {
-      addCredit(customerId, cart.total, transaction.id, user.name)
-    }
+      // Refresh customers if credit sale
+      if (paymentMethod === 'credit' && customerId) {
+        await refreshCustomers()
+      }
 
-    // Store transaction for receipt
-    setLastTransaction(transaction)
+      // Store transaction for receipt
+      setLastTransaction(transaction)
 
-    // Clear cart and close modal
-    cart.clearCart()
-    setIsPaymentOpen(false)
+      // Clear cart and close modal
+      cart.clearCart()
+      setIsPaymentOpen(false)
 
-    // Show success and print option
-    toast.success('Sale completed!', {
-      description: `Transaction ${transaction.id.split('-')[0]} completed successfully.`,
-      action: {
-        label: 'Print Receipt',
-        onClick: () => {
-          setTimeout(() => handlePrint(), 100)
+      // Show success and print option
+      toast.success('Sale completed!', {
+        description: `Transaction ${transaction.id.substring(0, 8)} completed successfully.`,
+        action: {
+          label: 'Print Receipt',
+          onClick: () => {
+            setTimeout(() => handlePrint(), 100)
+          },
         },
-      },
-    })
+      })
+    } catch (error) {
+      console.error('Error completing transaction:', error)
+      toast.error('Failed to complete transaction', {
+        description: 'Please try again.',
+      })
+    }
   }
 
   return (
