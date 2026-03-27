@@ -41,7 +41,7 @@ export function LoginForm() {
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
             <Wheat className="h-8 w-8 text-emerald-600" />
           </div>
-          <CardTitle className="text-2xl">Feeds & Rice Store</CardTitle>
+          <CardTitle className="text-2xl">Feeds &amp; Rice Store</CardTitle>
           <CardDescription>Point of Sale System</CardDescription>
         </CardHeader>
         <CardContent>
